@@ -2,145 +2,123 @@
 
 import {
   RewardedAd,
-  RewardedAdEventType,
+  InterstitialAd,
   AdEventType,
-  TestIds
+  RewardedAdEventType,
 } from "react-native-google-mobile-ads";
 
-import { supabase } from "../../lib/supabase";
-import type { AdType } from "../types";
-import { DAILY_REWARD_AMOUNT } from "./mining.utils";
+// ----------------------------
+// TEST AD UNITS (Google)
+// Replace with your real IDs in production
+// ----------------------------
+const REWARDED_AD_ID = "ca-app-pub-3940256099942544/5224354917";
+const INTERSTITIAL_AD_ID = "ca-app-pub-3940256099942544/1033173712";
 
-const REWARDED_AD_UNIT = TestIds.REWARDED;
+// ----------------------------
+// Create Ad Instances
+// ----------------------------
+export const rewardedAd = RewardedAd.createForAdRequest(REWARDED_AD_ID, {
+  requestNonPersonalizedAdsOnly: true,
+});
 
-/**
- * ALWAYS create a new rewardedAd instance per play.
- */
-function createRewardedAd() {
-  return RewardedAd.createForAdRequest(REWARDED_AD_UNIT);
-}
-
-let preloadedAd: ReturnType<typeof createRewardedAd> | null = null;
-
-/**
- * Preload rewarded ads for smoother UX
- */
-export function loadRewardedAd() {
-  try {
-    preloadedAd = createRewardedAd();
-    preloadedAd.load();
-  } catch (e) {
-    console.warn("Preload rewardedAd error:", e);
-    preloadedAd = null;
+export const interstitialAd = InterstitialAd.createForAdRequest(
+  INTERSTITIAL_AD_ID,
+  {
+    requestNonPersonalizedAdsOnly: true,
   }
-}
+);
 
-/**
- * showRewardedAd
- * Clean, safe, stable, zero-duplicate-callback version.
- */
-export async function showRewardedAd(
-  adType: AdType,
-  userId?: string | null
-): Promise<boolean> {
-  const rewardedAd = preloadedAd ?? createRewardedAd();
+// ----------------------------
+// Load Rewarded Ad
+// ----------------------------
+export const loadRewardedAd = () => {
+  if (!rewardedAd.loaded) {
+    rewardedAd.load();
+  }
+};
 
-  // prevent reusing old ad
-  preloadedAd = null;
+// ----------------------------
+// Show Rewarded Ad with Promise
+// ----------------------------
+export const showRewardedAd = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    loadRewardedAd();
 
-  return new Promise<boolean>((resolve) => {
-    let earnedReward = false;
-    let hasResolved = false;
-
-    const finish = async (success: boolean) => {
-      if (hasResolved) return;
-      hasResolved = true;
-
-      // Log to Supabase
-      try {
-        await supabase.from("ad_interactions").insert({
-          user_id: userId ?? null,
-          ad_type: adType,
-          completed: success,
-          reward:
-            success && adType === "daily_reward"
-              ? DAILY_REWARD_AMOUNT
-              : 0
-        });
-      } catch (e) {
-        console.warn("Failed to log ad_interaction:", e);
-      }
-
-      // Preload next ad in background
-      try {
-        loadRewardedAd();
-      } catch {}
-
-      resolve(success);
-    };
-
-    // Cleanup helper
-    const cleanup = () => {
-      try {
-        onLoaded();
-        onEarned();
-        onClosed();
-        onError();
-      } catch {}
-    };
-
-    // -----------------------------------------
-    // EVENT LISTENERS (Correct for v16+)
-    // -----------------------------------------
-
-    const onLoaded = rewardedAd.addAdEventListener(
+    const unsubscribeLoaded = rewardedAd.addAdEventListener(
       RewardedAdEventType.LOADED,
       () => {
-        try {
-          rewardedAd.show();
-        } catch (e) {
-          console.warn("RewardedAd.show error:", e);
-          cleanup();
-          finish(false);
-        }
+        rewardedAd.show();
       }
     );
 
-    const onEarned = rewardedAd.addAdEventListener(
+    const unsubscribeEarned = rewardedAd.addAdEventListener(
       RewardedAdEventType.EARNED_REWARD,
       () => {
-        earnedReward = true;
+        resolve(true);
       }
     );
 
-    // FIXED: “CLOSED” comes from AdEventType, not RewardedAdEventType
-    const onClosed = rewardedAd.addAdEventListener(
+    const unsubscribeClosed = rewardedAd.addAdEventListener(
       AdEventType.CLOSED,
       () => {
-        cleanup();
-        finish(earnedReward);
+        resolve(false);
+        rewardedAd.load(); // preload next ad
       }
     );
 
-    // FIXED: “FAILED_TO_LOAD” → AdEventType.ERROR
-    const onError = rewardedAd.addAdEventListener(
+    const unsubscribeError = rewardedAd.addAdEventListener(
       AdEventType.ERROR,
-      (error) => {
-        console.warn("RewardedAd load/show error:", error);
-        cleanup();
-        finish(false);
+      () => {
+        resolve(false);
       }
     );
 
-    // -----------------------------------------
-    // Start loading the ad
-    // -----------------------------------------
-    try {
-      rewardedAd.load();
-    } catch (e) {
-      console.warn("rewardedAd.load exception:", e);
-      cleanup();
-      finish(false);
-    }
+    setTimeout(() => {
+      resolve(false);
+    }, 10000);
   });
-}
+};
+
+// ----------------------------
+// Load Interstitial Ad
+// ----------------------------
+export const loadInterstitialAd = () => {
+  if (!interstitialAd.loaded) {
+    interstitialAd.load();
+  }
+};
+
+// ----------------------------
+// Show Interstitial Ad with Promise
+// ----------------------------
+export const showInterstitialAd = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    loadInterstitialAd();
+
+    const unsubscribeLoaded = interstitialAd.addAdEventListener(
+      AdEventType.LOADED,
+      () => {
+        interstitialAd.show();
+      }
+    );
+
+    const unsubscribeClosed = interstitialAd.addAdEventListener(
+      AdEventType.CLOSED,
+      () => {
+        resolve(true);
+        interstitialAd.load();
+      }
+    );
+
+    const unsubscribeError = interstitialAd.addAdEventListener(
+      AdEventType.ERROR,
+      () => {
+        resolve(false);
+      }
+    );
+
+    setTimeout(() => {
+      resolve(false);
+    }, 10000);
+  });
+};
