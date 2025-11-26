@@ -80,7 +80,8 @@ export default function MiningDashboard() {
     if (!userId) return Alert.alert("Sign in required");
     setStarting(true);
     try {
-      const watched = await showRewardedAd("initial", userId);
+      const watched = await showRewardedAd();
+
       if (!watched) {
         Alert.alert("Ad not completed", "You must watch the ad to start mining.");
         return;
@@ -123,7 +124,7 @@ export default function MiningDashboard() {
     if (!userId) return Alert.alert("Sign in required");
     setBoosting(true);
     try {
-      const watched = await showRewardedAd("daily_boost", userId);
+      const watched = await showRewardedAd();
       if (!watched) return Alert.alert("Boost not applied", "Ad not completed.");
 
       const r = await applyBoost(userId);
@@ -140,7 +141,7 @@ export default function MiningDashboard() {
     if (!userId) return Alert.alert("Sign in required");
     setDailyClaiming(true);
     try {
-      const watched = await showRewardedAd("daily_reward", userId);
+      const watched = await showRewardedAd();
       if (!watched) return Alert.alert("No reward", "Ad not completed.");
 
       const r = await claimDailyReward(userId);
